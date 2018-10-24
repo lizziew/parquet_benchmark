@@ -14,6 +14,10 @@ import java.util.ArrayList;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.conf.Configuration;
 import java.io.File;
+import java.io.Reader;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+import org.apache.commons.csv.CSVRecord;
 
 public class App 
 {
@@ -32,7 +36,7 @@ public class App
             writer.write(record);
         }
 
-        writer.close(); 
+        writer.close();
     }
 
     public static void main( String[] args ) {
@@ -53,33 +57,18 @@ public class App
         List<GenericData.Record> sampleData = new ArrayList<GenericData.Record>();
 
         // Read in CSV file
-        String csvFile = CSV_PATH;
-        BufferedReader br = null;
-        String line;
-        String delimiter = "\\|";
-
         try {
-            br = new BufferedReader(new FileReader(csvFile));
-            while ((line = br.readLine()) != null) {
-                String[] split = line.split(delimiter);
-                GenericData.Record record = new GenericData.Record(schema);
-                record.put("col1", Integer.parseInt(split[0]));
-                record.put("col2", Integer.parseInt(split[1]));
-                record.put("col3", Integer.parseInt(split[2]));
-                sampleData.add(record);
+            Reader in = new FileReader(CSV_PATH);
+            Iterable<CSVRecord> records = CSVFormat.DEFAULT.withDelimiter('|').parse(in);
+            for (CSVRecord record : records) {
+                GenericData.Record genericRecord = new GenericData.Record(schema);
+                genericRecord.put("col1", Integer.parseInt(record.get(0)));
+                genericRecord.put("col2", Integer.parseInt(record.get(1)));
+                genericRecord.put("col3", Integer.parseInt(record.get(2)));
+                sampleData.add(genericRecord);
             }
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            if (br != null) {
-                try {
-                    br.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
         }
 
         // Delete old Parquet, if exists
