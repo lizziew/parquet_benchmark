@@ -19,10 +19,13 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 
-public class App 
+public class App
 {
+    public static final int NUM_ITERATIONS = 200;
     public static final String CSV_PATH = "/Users/elizabethwei/code/benchmark/src/main/java/com/ewei/parquet/gendata.csv";
     public static final String PARQUET_PATH = "/Users/elizabethwei/code/benchmark/src/main/java/com/ewei/parquet/gendata.parquet";
+//    public static final String CSV_PATH = "/home/ewei/../../big_fast_drive/ewei/parquet_pipeline/gendata.csv";
+//    public static final String PARQUET_PATH = "/home/ewei/../../big_fast_drive/ewei/parquet_benchmark/gendata.parquet";
 
     public static void writeToParquet(List<GenericData.Record> recordsToWrite, Schema schema, Path fileToWrite) throws IOException {
         ParquetWriter<GenericData.Record> writer = AvroParquetWriter
@@ -32,8 +35,10 @@ public class App
                 .withCompressionCodec(CompressionCodecName.SNAPPY)
                 .build();
 
-        for (GenericData.Record record : recordsToWrite) {
-            writer.write(record);
+        for (int i = 0; i < NUM_ITERATIONS; i++) {
+            for (GenericData.Record record : recordsToWrite) {
+                writer.write(record);
+            }
         }
 
         writer.close();
@@ -56,6 +61,7 @@ public class App
         // Data to be written to Parquet
         List<GenericData.Record> sampleData = new ArrayList<GenericData.Record>();
 
+        System.out.println("Reading in CSV file");
         // Read in CSV file
         try {
             Reader in = new FileReader(CSV_PATH);
@@ -75,6 +81,7 @@ public class App
         File f = new File(PARQUET_PATH);
         f.delete();
 
+        System.out.println("Writing Parquet");
         // Write new Parquet
         try {
             writeToParquet(sampleData, schema, new Path(PARQUET_PATH));
