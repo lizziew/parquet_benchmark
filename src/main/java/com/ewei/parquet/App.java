@@ -19,6 +19,7 @@ import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SparkSession.Builder; 
 
 public class App
 {
@@ -43,10 +44,11 @@ public class App
     }
 
     public static void queryParquet(SparkSession spark) {
-	Dataset<Row> parquetFileDF = spark.read().parquet("/mnt/minwei/parquet_benchmark/src/main/java/com/ewei/parquet/gendata.parquet");
+	Dataset<Row> parquetFileDF = spark.read().schema("col1 INT").parquet("/mnt/minwei/parquet_benchmark/src/main/java/com/ewei/parquet/gendata.parquet");
 	parquetFileDF.createOrReplaceTempView("parquetFile"); 
-    	Dataset<Row> sqlDF = spark.sql("SELECT * FROM parquetFile");
-	sqlDF.show(); 
+    	Dataset<Row> sqlDF = spark.sql("SELECT SUM(col1) FROM parquetFile");
+	sqlDF.printSchema();
+	System.out.println("FOO " + sqlDF.count()); 
     }
 
     public static void main( String[] args ) {
@@ -56,9 +58,7 @@ public class App
                 + "\"type\": \"record\","
                 + "\"name\": \"RecordName\","
                 + "\"fields\": ["
-                + " {\"name\": \"col1\", \"type\": \"int\"},"
-                + " {\"name\": \"col2\", \"type\": \"int\"},"
-                + " {\"name\": \"col3\", \"type\": \"int\"}"
+                + " {\"name\": \"col1\", \"type\": \"int\"}"
                 + " ]}";
         Schema.Parser parser = new Schema.Parser().setValidate(true);
         Schema schema = parser.parse(schemaString);
@@ -93,13 +93,10 @@ public class App
         }
 
         System.out.println("Querying Parquet");
-    	SparkSession spark = SparkSession
-		    .builder()
-		    .appName("BenchmarkParquetSum")
-		    .getOrCreate();
+    	SparkSession spark = SparkSession.builder().appName("BenchmarkParquetSum").config("spark.master", "local").getOrCreate();
 
-	    queryParquet(spark);
+	  queryParquet(spark);
 	
-	    spark.stop();
+	 spark.stop();
     }
 }
