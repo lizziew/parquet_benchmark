@@ -5,8 +5,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
@@ -16,7 +14,6 @@ import org.apache.hadoop.conf.Configuration;
 import java.io.File;
 import java.io.Reader;
 import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
 import org.apache.spark.sql.Dataset;
@@ -95,13 +92,14 @@ public class App
             e.printStackTrace();
         }
 
+        System.out.println("Querying Parquet");
     	SparkSession spark = SparkSession
-		.builder()
-		.appName("BenchmarkParquetSum")
-		.getOrCreate();
+		    .builder()
+		    .appName("BenchmarkParquetSum")
+		    .getOrCreate();
 
-	queryParquet(spark);
+	    queryParquet(spark);
 	
-	spark.stop(); 
+	    spark.stop();
     }
 }
