@@ -18,30 +18,38 @@ import java.io.Reader;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
+import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
 
 public class App
 {
-    public static final int NUM_ITERATIONS = 200;
-    public static final String CSV_PATH = "/Users/elizabethwei/code/benchmark/src/main/java/com/ewei/parquet/gendata.csv";
-    public static final String PARQUET_PATH = "/Users/elizabethwei/code/benchmark/src/main/java/com/ewei/parquet/gendata.parquet";
-//    public static final String CSV_PATH = "/home/ewei/../../big_fast_drive/ewei/parquet_pipeline/gendata.csv";
-//    public static final String PARQUET_PATH = "/home/ewei/../../big_fast_drive/ewei/parquet_benchmark/gendata.parquet";
+    public static final String CSV_PATH = "/mnt/minwei/parquet_pipeline/gendata.csv";
+    public static final String PARQUET_PATH = "/mnt/minwei/parquet_benchmark/src/main/java/com/ewei/parquet/gendata.parquet";
 
     public static void writeToParquet(List<GenericData.Record> recordsToWrite, Schema schema, Path fileToWrite) throws IOException {
         ParquetWriter<GenericData.Record> writer = AvroParquetWriter
                 .<GenericData.Record>builder(fileToWrite)
-                .withSchema(schema)
-                .withConf(new Configuration())
-                .withCompressionCodec(CompressionCodecName.SNAPPY)
+		.withSchema(schema)
+		.withWriterVersion(PARQUET_2_0)
+		.withDictionaryEncoding(false)
+		.withConf(new Configuration())
+                .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
                 .build();
 
-        for (int i = 0; i < NUM_ITERATIONS; i++) {
-            for (GenericData.Record record : recordsToWrite) {
-                writer.write(record);
-            }
+	for (GenericData.Record record : recordsToWrite) {
+        	writer.write(record);
         }
 
         writer.close();
+    }
+
+    public static void queryParquet(SparkSession spark) {
+	Dataset<Row> parquetFileDF = spark.read().parquet("/mnt/minwei/parquet_benchmark/src/main/java/com/ewei/parquet/gendata.parquet");
+	parquetFileDF.createOrReplaceTempView("parquetFile"); 
+    	Dataset<Row> sqlDF = spark.sql("SELECT * FROM parquetFile");
+	sqlDF.show(); 
     }
 
     public static void main( String[] args ) {
@@ -69,8 +77,6 @@ public class App
             for (CSVRecord record : records) {
                 GenericData.Record genericRecord = new GenericData.Record(schema);
                 genericRecord.put("col1", Integer.parseInt(record.get(0)));
-                genericRecord.put("col2", Integer.parseInt(record.get(1)));
-                genericRecord.put("col3", Integer.parseInt(record.get(2)));
                 sampleData.add(genericRecord);
             }
         } catch (IOException e) {
@@ -88,5 +94,14 @@ public class App
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+    	SparkSession spark = SparkSession
+		.builder()
+		.appName("BenchmarkParquetSum")
+		.getOrCreate();
+
+	queryParquet(spark);
+	
+	spark.stop(); 
     }
 }
