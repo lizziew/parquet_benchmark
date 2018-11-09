@@ -1,158 +1,296 @@
 package com.ewei.parquet;
 
+import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+
 import java.io.FileReader;
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.HashMap;
+
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.conf.Configuration;
+
 import java.io.File;
 import java.io.Reader;
+import java.io.BufferedReader;
+
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
+
 import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.SparkSession.Builder; 
+import org.apache.spark.sql.SparkSession.Builder;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.Days;
+import org.joda.time.MutableDateTime;
+
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.util.Scanner;
 
-public class App
-{
-    public static final String OUTPUT_PATH = "/mnt/minwei/output.txt";
-    public static final String CSV_PATH = "/mnt/minwei/parquet_pipeline/gendata.csv";
-    public static final String PARQUET_PATH = "/mnt/minwei/parquet_benchmark/src/main/java/com/ewei/parquet/gendata.parquet";
-    public static BufferedWriter outputWriter;
+public class App {
+    private static final String M1 = "/mnt/minwei/";
+    private static final String M2 = "/Users/elizabethwei/code/";
 
-    public static void writeToParquet(List<GenericData.Record> recordsToWrite, Schema schema, Path fileToWrite) throws IOException {
+    private static final String OUTPUT_PATH = M2 + "parquet_benchmark/output.txt";
+    private static final String CSV_PATH = M2 + "tpch-dbgen/";
+    private static final String PARQUET_PATH = M2 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
+
+    private static BufferedWriter outputWriter;
+
+    private static ArrayList<String> relations;
+
+    private static void writeToParquet(String relation, List<GenericData.Record> recordsToWrite, Schema schema, Path fileToWrite, String compressionSchemeString, String dictionaryOptionString) throws IOException {
+        CompressionCodecName scheme = CompressionCodecName.UNCOMPRESSED;
+        if (compressionSchemeString.toLowerCase().equals("snappy")) {
+            scheme = CompressionCodecName.SNAPPY;
+        } else if (compressionSchemeString.toLowerCase().equals("gzip")) {
+            scheme = CompressionCodecName.GZIP;
+        }
+
+        boolean enableDictionary = dictionaryOptionString.toLowerCase().equals("true");
+
         ParquetWriter<GenericData.Record> writer = AvroParquetWriter
                 .<GenericData.Record>builder(fileToWrite)
-		.withSchema(schema)
-		.withWriterVersion(PARQUET_2_0)
-		.withDictionaryEncoding(false)
-		.withConf(new Configuration())
-                .withCompressionCodec(CompressionCodecName.SNAPPY)
+                .withSchema(schema)
+                .withWriterVersion(PARQUET_2_0)
+                .withDictionaryEncoding(enableDictionary)
+                .withConf(new Configuration())
+                .withCompressionCodec(scheme)
                 .build();
 
-	final long startTime = System.currentTimeMillis();
-	for (GenericData.Record record : recordsToWrite) {
-        	writer.write(record);
+        final long startTime = System.currentTimeMillis();
+        for (GenericData.Record record : recordsToWrite) {
+            writer.write(record);
         }
-	final long endTime = System.currentTimeMillis();
-	outputWriter.write(("\nTotal write to parquet execution time: " + (endTime - startTime)));
+        final long endTime = System.currentTimeMillis();
+        outputWriter.write(("\nTotal execution time to write " + relation + " to Parquet: " + (endTime - startTime)));
 
         writer.close();
     }
 
-    public static void queryParquet(SparkSession spark) throws IOException {
-	Dataset<Row> parquetFileDF = spark.read().schema("col1 INT").parquet(PARQUET_PATH);
-	parquetFileDF.createOrReplaceTempView("parquetFile"); 
+    private static void queryParquet(String queryName, String query, SparkSession spark) throws IOException {
+        // Load in parquet files
+        for (String relation : relations) {
+            try {
+                BufferedReader br = new BufferedReader(new FileReader(PARQUET_PATH + relation + "_schema.txt"));
 
-	long startTime = 0;
-	long endTime = 0;
-	Dataset<Row> sqlDF; 
+                StringBuilder schemaString = new StringBuilder();
 
-	for (int i = 0; i < 3; i++) {
-		startTime = System.currentTimeMillis();
-    		sqlDF = spark.sql("SELECT SUM(col1) FROM parquetFile");
-		endTime = System.currentTimeMillis();
-		outputWriter.write("\nTime: " + i + ": " + (endTime-startTime)); 
-	}
-     
-	long totalTime = 0;
+                String line;
+                while ((line = br.readLine()) != null) {
+                    String[] input = line.replaceAll(" ", "").split(",");
+                    schemaString.append(input[0]);
+                    schemaString.append(input[1].toUpperCase());
+                    schemaString.append(",");
+                }
+
+                schemaString.deleteCharAt(schemaString.length() - 1);
+
+                Dataset<Row> dataframe = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");
+                dataframe.createOrReplaceTempView("lineitem");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        long startTime, endTime;
+
+        // Warm up
+        for (int i = 0; i < 3; i++) {
+            startTime = System.currentTimeMillis();
+            spark.sql(query);
+            endTime = System.currentTimeMillis();
+            outputWriter.write("\n   Time: " + i + ": " + (endTime - startTime));
+        }
+
+        // Actually execute query
+        long totalTime = 0;
         for (int i = 0; i < 10; i++) {
-		startTime = System.currentTimeMillis();
-		sqlDF = spark.sql("SELECT SUM(col1) FROM parquetFile"); 
-		endTime = System.currentTimeMillis();
-		totalTime += (endTime - startTime);
-		outputWriter.write("\nTime: " + i + ": " + (endTime-startTime)); 
-	}
-	long avgTime = totalTime / 10;
-	outputWriter.write(("\nTotal query execution time: " + avgTime + "\n\n"));
+            startTime = System.currentTimeMillis();
+            spark.sql(query);
+            endTime = System.currentTimeMillis();
+            totalTime += (endTime - startTime);
+            outputWriter.write("\n   Time: " + i + ": " + (endTime - startTime));
+        }
+
+        // Calculate and output average time
+        long avgTime = totalTime / 10;
+        outputWriter.write(("\nTotal execution time to execute query " + queryName + ": " + avgTime + "\n\n"));
     }
 
-    public static void uncompressedBenchmark() {
-	long sum = 0;
+    private static void uncompressedBenchmark() {
+        long sum = 0;
 
-	// Read in CSV file
+        // Read in CSV file
         try {
-	for (int i = 0; i < 15; i++) {
-	    final long startTime = System.currentTimeMillis();
-            Reader in = new FileReader(CSV_PATH);
-            Iterable<CSVRecord> records = CSVFormat.DEFAULT.withDelimiter('|').parse(in);
-            for (CSVRecord record : records) {
-                sum += Integer.parseInt(record.get(0));
+            for (int i = 0; i < 15; i++) {
+                final long startTime = System.currentTimeMillis();
+                Reader in = new FileReader(CSV_PATH);
+                Iterable<CSVRecord> records = CSVFormat.DEFAULT.withDelimiter('|').parse(in);
+                for (CSVRecord record : records) {
+                    sum += Integer.parseInt(record.get(0));
+                }
+                final long endTime = System.currentTimeMillis();
+                System.out.println("Sum: " + sum + " in " + (endTime - startTime) + " ms");
             }
-	    final long endTime = System.currentTimeMillis();
-	    System.out.println("Sum: " + sum + " in " + (endTime - startTime) + " ms"); 
-	}
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public static void main( String[] args ) throws IOException {
-	// uncompressedBenchmark(); 
+    public static void main(String[] args) throws IOException {
+        // Set up output file to write benchmarks too
+        try {
+            outputWriter = new BufferedWriter(new FileWriter(OUTPUT_PATH, true));
+        } catch (IOException e) {
+            System.out.println("Failed to create buffered writer: " + e);
+        }
 
-	// Set up output
-	try {
-		outputWriter = new BufferedWriter(new FileWriter(OUTPUT_PATH, true));
-	} catch (IOException e) {
-		System.out.println("Failed to create buffered writer: " + e);
-	}
+        // Relations
+        relations = new ArrayList<String>();
+        relations.add("lineitem");
+        relations.add("customer");
+        relations.add("orders");
+        relations.add("supplier");
+        relations.add("nation");
+        relations.add("region");
+        relations.add("part");
 
-        // Create schema
-        String schemaString = "{"
-                + "\"namespace\": \"com.ewei.parquet\","
-                + "\"type\": \"record\","
-                + "\"name\": \"RecordName\","
-                + "\"fields\": ["
-                + " {\"name\": \"col1\", \"type\": \"int\"}"
-                + " ]}";
+        // Create schemas
         Schema.Parser parser = new Schema.Parser().setValidate(true);
-        Schema schema = parser.parse(schemaString);
+        HashMap<String, Schema> schemas = new HashMap<String, Schema>();
+
+        for (String relation : relations) {
+            try {
+                BufferedReader br = new BufferedReader(new FileReader(PARQUET_PATH + relation + "_schema.txt"));
+
+                StringBuilder schemaString = new StringBuilder("{"
+                        + "\"namespace\": \"com.ewei.parquet\","
+                        + "\"type\": \"record\","
+                        + "\"name\": \"" + relation + "\","
+                        + "\"fields\": [");
+
+                String line;
+                while ((line = br.readLine()) != null) {
+                    String[] input = line.replaceAll(" ", "").split(",");
+                    schemaString.append(" {\"name\": \"");
+                    schemaString.append(input[0]);
+                    if (input[1].equals("date")) {
+                        schemaString.append("\", \"type\":");
+                        schemaString.append("{\"type\": \"int\", \"logicalType\": \"date\"}");
+                        schemaString.append("},");
+                    } else {
+                        schemaString.append("\", \"type\": \"");
+                        schemaString.append(input[1]);
+                        schemaString.append("\"},");
+                    }
+                }
+
+                schemaString.deleteCharAt(schemaString.length() - 1);
+                schemaString.append(" ]}");
+
+                schemas.put(relation, parser.parse(schemaString.toString()));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
         // Data to be written to Parquet
         List<GenericData.Record> sampleData = new ArrayList<GenericData.Record>();
 
-        System.out.println("Reading in CSV file");
-        // Read in CSV file
-        try {
-            Reader in = new FileReader(CSV_PATH);
-            Iterable<CSVRecord> records = CSVFormat.DEFAULT.withDelimiter('|').parse(in);
-            for (CSVRecord record : records) {
-                GenericData.Record genericRecord = new GenericData.Record(schema);
-                genericRecord.put("col1", Integer.parseInt(record.get(0)));
-                sampleData.add(genericRecord);
+        // Read in CSV files and write out Parquet files
+        String compressionSchemeString = args[0];
+        String dictionaryOptionString = args[1];
+        outputWriter.write("\nBenchmarking compression scheme: " + compressionSchemeString + ", dict: " + dictionaryOptionString);
+
+        MutableDateTime epoch = new MutableDateTime(0l, DateTimeZone.UTC);
+        SimpleDateFormat localDateFormat = new SimpleDateFormat("yyyy-MM-dd");
+
+        for (String relation : relations) {
+            System.out.println("Reading in " + relation + " CSV file");
+            try {
+                Reader in = new FileReader(CSV_PATH + relation + ".csv");
+                Iterable<CSVRecord> records = CSVFormat.DEFAULT.withDelimiter('|').parse(in);
+                Schema schema = schemas.get(relation);
+                List<Schema.Field> fields = schema.getFields();
+
+                for (CSVRecord record : records) {
+                    GenericData.Record genericRecord = new GenericData.Record(schemas.get(relation));
+                    int i = 0;
+                    for (Schema.Field field : fields) {
+                        Schema.Type type = field.schema().getType();
+                        LogicalType logicalType = field.schema().getLogicalType();
+
+                        if (type.equals(Schema.Type.INT)) {
+                            if (logicalType == null) {
+                                genericRecord.put(field.name(), Integer.parseInt(record.get(i)));
+                            } else {
+                                DateTime currentDate = new DateTime(localDateFormat.parse(record.get(i)));
+                                Days days = Days.daysBetween(epoch, currentDate);
+                                genericRecord.put(field.name(), days.getDays());
+                            }
+                        } else if (type.equals(Schema.Type.DOUBLE)) {
+                            genericRecord.put(field.name(), Double.parseDouble(record.get(i)));
+                        } else if (type.equals(Schema.Type.STRING)) {
+                            genericRecord.put(field.name(), record.get(i));
+                        }
+
+                        i++;
+                    }
+                    sampleData.add(genericRecord);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (ParseException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+
+            File f = new File(PARQUET_PATH + relation + ".parquet");
+            f.delete();
+
+            System.out.println("Writing Parquet");
+            try {
+                writeToParquet(relation, sampleData, schemas.get(relation), new Path(PARQUET_PATH + relation + ".parquet"), compressionSchemeString, dictionaryOptionString);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            sampleData.clear();
         }
 
-        // Delete old Parquet, if exists
-        File f = new File(PARQUET_PATH);
-        f.delete();
-
-        System.out.println("Writing Parquet");
-        // Write new Parquet
-        try {
-            writeToParquet(sampleData, schema, new Path(PARQUET_PATH));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+        // Query Parquet
         System.out.println("Querying Parquet");
-    	SparkSession spark = SparkSession.builder().appName("BenchmarkParquetSum").config("spark.master", "local").getOrCreate();
+        ArrayList<String> queries = new ArrayList<String>();
+        queries.add("q1");
+        queries.add("q3");
+        queries.add("q4");
+        queries.add("q5");
+        queries.add("q6");
+        queries.add("q13");
+        queries.add("q14");
+        queries.add("q19");
 
-	  queryParquet(spark);
-	
-	 spark.stop();
-	outputWriter.close();
+        SparkSession spark = SparkSession.builder().appName("BenchmarkParquetSum").config("spark.master", "local").getOrCreate();
+        for (String queryName : queries) {
+            String query = new Scanner(new File(PARQUET_PATH + queryName + ".txt")).useDelimiter("\\Z").next();
+            System.out.println(query.replaceAll("\n", " "));
+            queryParquet(queryName, query, spark);
+        }
+        spark.stop();
+
+        outputWriter.close();
     }
 }

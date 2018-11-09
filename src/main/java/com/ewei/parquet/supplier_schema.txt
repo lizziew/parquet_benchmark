@@ -1,0 +1,7 @@
+s_suppkey, int
+s_name, string
+s_address, string
+s_nationkey, int
+s_phone, string
+s_acctbal, double
+s_comment, string
