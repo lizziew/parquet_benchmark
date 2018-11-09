@@ -108,8 +108,8 @@ public class App {
 
         long startTime, endTime;
 
-	System.out.println("Querying " + queryName);
-	System.out.println(query + "\n\n"); 
+        System.out.println("Querying " + queryName);
+        System.out.println(query + "\n\n");
 
         // Warm up
         for (int i = 0; i < 3; i++) {
@@ -155,16 +155,16 @@ public class App {
     }
 
     public static void main(String[] args) throws IOException {
-     	String compressionSchemeString = args[0];
+        String compressionSchemeString = args[0];
         String dictionaryOptionString = args[1];
-               // Set up output file to write benchmarks too
+        // Set up output file to write benchmarks too
         try {
             outputWriter = new BufferedWriter(new FileWriter(OUTPUT_PATH + "output" + compressionSchemeString + "_" + dictionaryOptionString + ".txt", true));
         } catch (IOException e) {
             System.out.println("Failed to create buffered writer: " + e);
         }
 
-	 outputWriter.write("\nBenchmarking compression scheme: " + compressionSchemeString + ", dict: " + dictionaryOptionString + "...\n");
+        outputWriter.write("\nBenchmarking compression scheme: " + compressionSchemeString + ", dict: " + dictionaryOptionString + "...\n");
 
 
         // Relations
@@ -220,7 +220,7 @@ public class App {
         List<GenericData.Record> sampleData = new ArrayList<GenericData.Record>();
 
         // Read in CSV files and write out Parquet files
-           MutableDateTime epoch = new MutableDateTime(0l, DateTimeZone.UTC);
+        MutableDateTime epoch = new MutableDateTime(0l, DateTimeZone.UTC);
         SimpleDateFormat localDateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
         for (String relation : relations) {
@@ -267,11 +267,11 @@ public class App {
 
             System.out.println("Writing Parquet");
             try {
-		File inputFile = new File(CSV_PATH + relation + ".csv");		
-        	outputWriter.write("\n    Before file size of " + relation + ": " + inputFile.length() + " bytes");
+                File inputFile = new File(CSV_PATH + relation + ".csv");
+                outputWriter.write("\n    Before file size of " + relation + ": " + inputFile.length() + " bytes");
                 writeToParquet(relation, sampleData, schemas.get(relation), new Path(PARQUET_PATH + relation + ".parquet"), compressionSchemeString, dictionaryOptionString);
-		File outputFile = new File(PARQUET_PATH + relation + ".parquet");		
-        	outputWriter.write("\n    After file size of " + relation + ": " + outputFile.length() + " bytes\n");
+                File outputFile = new File(PARQUET_PATH + relation + ".parquet");
+                outputWriter.write("\n    After file size of " + relation + ": " + outputFile.length() + " bytes\n");
             } catch (IOException e) {
                 e.printStackTrace();
             }
