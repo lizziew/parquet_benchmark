@@ -44,9 +44,9 @@ public class App {
     private static final String M1 = "/mnt/minwei/";
     private static final String M2 = "/Users/elizabethwei/code/";
 
-    private static final String OUTPUT_PATH = M2 + "parquet_benchmark/output.txt";
-    private static final String CSV_PATH = M2 + "tpch-dbgen/";
-    private static final String PARQUET_PATH = M2 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
+    private static final String OUTPUT_PATH = M1 + "parquet_benchmark/";
+    private static final String CSV_PATH = M1 + "tpch-dbgen/";
+    private static final String PARQUET_PATH = M1 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
 
     private static BufferedWriter outputWriter;
 
@@ -76,7 +76,7 @@ public class App {
             writer.write(record);
         }
         final long endTime = System.currentTimeMillis();
-        outputWriter.write(("\nTotal execution time to write " + relation + " to Parquet: " + (endTime - startTime)));
+        outputWriter.write("\n    Total execution time to write " + relation + " to Parquet: " + (endTime - startTime) + " ms");
 
         writer.close();
     }
@@ -92,7 +92,7 @@ public class App {
                 String line;
                 while ((line = br.readLine()) != null) {
                     String[] input = line.replaceAll(" ", "").split(",");
-                    schemaString.append(input[0]);
+                    schemaString.append(input[0] + " ");
                     schemaString.append(input[1].toUpperCase());
                     schemaString.append(",");
                 }
@@ -100,7 +100,7 @@ public class App {
                 schemaString.deleteCharAt(schemaString.length() - 1);
 
                 Dataset<Row> dataframe = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");
-                dataframe.createOrReplaceTempView("lineitem");
+                dataframe.createOrReplaceTempView(relation);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -108,12 +108,15 @@ public class App {
 
         long startTime, endTime;
 
+	System.out.println("Querying " + queryName);
+	System.out.println(query + "\n\n"); 
+
         // Warm up
         for (int i = 0; i < 3; i++) {
             startTime = System.currentTimeMillis();
             spark.sql(query);
             endTime = System.currentTimeMillis();
-            outputWriter.write("\n   Time: " + i + ": " + (endTime - startTime));
+            outputWriter.write("\n        Time: " + i + ": " + (endTime - startTime));
         }
 
         // Actually execute query
@@ -123,12 +126,12 @@ public class App {
             spark.sql(query);
             endTime = System.currentTimeMillis();
             totalTime += (endTime - startTime);
-            outputWriter.write("\n   Time: " + i + ": " + (endTime - startTime));
+            outputWriter.write("\n        Time: " + i + ": " + (endTime - startTime));
         }
 
         // Calculate and output average time
         long avgTime = totalTime / 10;
-        outputWriter.write(("\nTotal execution time to execute query " + queryName + ": " + avgTime + "\n\n"));
+        outputWriter.write(("\n    Average execution time to execute query " + queryName + ": " + avgTime + "\n\n"));
     }
 
     private static void uncompressedBenchmark() {
@@ -152,12 +155,17 @@ public class App {
     }
 
     public static void main(String[] args) throws IOException {
-        // Set up output file to write benchmarks too
+     	String compressionSchemeString = args[0];
+        String dictionaryOptionString = args[1];
+               // Set up output file to write benchmarks too
         try {
-            outputWriter = new BufferedWriter(new FileWriter(OUTPUT_PATH, true));
+            outputWriter = new BufferedWriter(new FileWriter(OUTPUT_PATH + "output" + compressionSchemeString + "_" + dictionaryOptionString + ".txt", true));
         } catch (IOException e) {
             System.out.println("Failed to create buffered writer: " + e);
         }
+
+	 outputWriter.write("\nBenchmarking compression scheme: " + compressionSchemeString + ", dict: " + dictionaryOptionString + "...\n");
+
 
         // Relations
         relations = new ArrayList<String>();
@@ -212,11 +220,7 @@ public class App {
         List<GenericData.Record> sampleData = new ArrayList<GenericData.Record>();
 
         // Read in CSV files and write out Parquet files
-        String compressionSchemeString = args[0];
-        String dictionaryOptionString = args[1];
-        outputWriter.write("\nBenchmarking compression scheme: " + compressionSchemeString + ", dict: " + dictionaryOptionString);
-
-        MutableDateTime epoch = new MutableDateTime(0l, DateTimeZone.UTC);
+           MutableDateTime epoch = new MutableDateTime(0l, DateTimeZone.UTC);
         SimpleDateFormat localDateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
         for (String relation : relations) {
@@ -263,7 +267,11 @@ public class App {
 
             System.out.println("Writing Parquet");
             try {
+		File inputFile = new File(CSV_PATH + relation + ".csv");		
+        	outputWriter.write("\n    Before file size of " + relation + ": " + inputFile.length() + " bytes");
                 writeToParquet(relation, sampleData, schemas.get(relation), new Path(PARQUET_PATH + relation + ".parquet"), compressionSchemeString, dictionaryOptionString);
+		File outputFile = new File(PARQUET_PATH + relation + ".parquet");		
+        	outputWriter.write("\n    After file size of " + relation + ": " + outputFile.length() + " bytes\n");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -272,7 +280,6 @@ public class App {
         }
 
         // Query Parquet
-        System.out.println("Querying Parquet");
         ArrayList<String> queries = new ArrayList<String>();
         queries.add("q1");
         queries.add("q3");
@@ -286,7 +293,6 @@ public class App {
         SparkSession spark = SparkSession.builder().appName("BenchmarkParquetSum").config("spark.master", "local").getOrCreate();
         for (String queryName : queries) {
             String query = new Scanner(new File(PARQUET_PATH + queryName + ".txt")).useDelimiter("\\Z").next();
-            System.out.println(query.replaceAll("\n", " "));
             queryParquet(queryName, query, spark);
         }
         spark.stop();

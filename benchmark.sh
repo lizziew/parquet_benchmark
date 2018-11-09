@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
-for i in `seq 1 10`;
+for i in UNCOMPRESSED SNAPPY GZIP
 do
-  echo $i
-  mvn clean 
-  mvn install dependency:copy-dependencies
-  java -server -cp "target/benchmark-1.0-SNAPSHOT.jar:target/dependency/*" com.ewei.parquet.App
+  for j in TRUE FALSE
+  do 
+    mvn clean 
+    mvn install dependency:copy-dependencies
+    java -server -cp "target/benchmark-1.0-SNAPSHOT.jar:target/dependency/*" com.ewei.parquet.App $i $j
+  done
 done 

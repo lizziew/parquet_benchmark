@@ -20,4 +20,4 @@ GROUP BY
 ORDER BY
     revenue desc,
     o_orderdate
-LIMIT 20;
+LIMIT 20
