@@ -7,20 +7,13 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.conf.Configuration;
-
-import java.io.File;
-import java.io.Reader;
-import java.io.BufferedReader;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
@@ -36,17 +29,13 @@ import org.joda.time.DateTimeZone;
 import org.joda.time.Days;
 import org.joda.time.MutableDateTime;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.util.Scanner;
-
 public class App {
     private static final String M1 = "/mnt/minwei/";
     private static final String M2 = "/Users/elizabethwei/code/";
 
-    private static final String OUTPUT_PATH = M1 + "parquet_benchmark/";
-    private static final String CSV_PATH = M1 + "tpch-dbgen/";
-    private static final String PARQUET_PATH = M1 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
+    private static final String OUTPUT_PATH = M2 + "parquet_benchmark/";
+    private static final String CSV_PATH = M2 + "tpch-dbgen/";
+    private static final String PARQUET_PATH = M2 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
 
     private static BufferedWriter outputWriter;
 
@@ -220,18 +209,21 @@ public class App {
         List<GenericData.Record> sampleData = new ArrayList<GenericData.Record>();
 
         // Read in CSV files and write out Parquet files
-        MutableDateTime epoch = new MutableDateTime(0l, DateTimeZone.UTC);
+        MutableDateTime epoch = new MutableDateTime(0L, DateTimeZone.UTC);
         SimpleDateFormat localDateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
         for (String relation : relations) {
             System.out.println("Reading in " + relation + " CSV file");
+
             try {
-                Reader in = new FileReader(CSV_PATH + relation + ".csv");
-                Iterable<CSVRecord> records = CSVFormat.DEFAULT.withDelimiter('|').parse(in);
                 Schema schema = schemas.get(relation);
                 List<Schema.Field> fields = schema.getFields();
 
-                for (CSVRecord record : records) {
+                String line;
+                BufferedReader br = new BufferedReader(new FileReader(CSV_PATH + relation + ".csv"));
+                while ((line = br.readLine()) != null) {
+                    String[] input = line.split("\\|");
+
                     GenericData.Record genericRecord = new GenericData.Record(schemas.get(relation));
                     int i = 0;
                     for (Schema.Field field : fields) {
@@ -240,22 +232,24 @@ public class App {
 
                         if (type.equals(Schema.Type.INT)) {
                             if (logicalType == null) {
-                                genericRecord.put(field.name(), Integer.parseInt(record.get(i)));
+                                genericRecord.put(field.name(), Integer.parseInt(input[i]));
                             } else {
-                                DateTime currentDate = new DateTime(localDateFormat.parse(record.get(i)));
+                                DateTime currentDate = new DateTime(localDateFormat.parse(input[i]));
                                 Days days = Days.daysBetween(epoch, currentDate);
                                 genericRecord.put(field.name(), days.getDays());
                             }
                         } else if (type.equals(Schema.Type.DOUBLE)) {
-                            genericRecord.put(field.name(), Double.parseDouble(record.get(i)));
+                            genericRecord.put(field.name(), Double.parseDouble(input[i]));
                         } else if (type.equals(Schema.Type.STRING)) {
-                            genericRecord.put(field.name(), record.get(i));
+                            genericRecord.put(field.name(), input[i]);
                         }
 
                         i++;
                     }
                     sampleData.add(genericRecord);
                 }
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ParseException e) {
