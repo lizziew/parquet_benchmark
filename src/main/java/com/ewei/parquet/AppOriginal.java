@@ -1,6 +1,5 @@
 package com.ewei.parquet;
 
-import com.databricks.spark.avro.SchemaConverters;
 import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -21,12 +20,10 @@ import org.apache.commons.csv.CSVRecord;
 
 import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.SparkSession.Builder;
-import org.apache.spark.sql.types.StructType;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Days;
@@ -43,7 +40,6 @@ public class App {
     private static BufferedWriter outputWriter;
 
     private static ArrayList<String> relations;
-    private static HashMap<String, Schema> schemas;
 
     private static void writeToParquet(String relation, List<GenericData.Record> recordsToWrite, Schema schema, Path fileToWrite, String compressionSchemeString, String dictionaryOptionString) throws IOException {
         CompressionCodecName scheme = CompressionCodecName.UNCOMPRESSED;
@@ -92,15 +88,8 @@ public class App {
 
                 schemaString.deleteCharAt(schemaString.length() - 1);
 
-                /*Dataset<Row> dataframe = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");*/
-
-                final StructType outPutSchemaStructType = (StructType) SchemaConverters.toSqlType(schemas.get(relation)).dataType();
-                Dataset<Row> inputDf = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");
-                JavaRDD<Row> rowJavaRDD = inputDf.javaRDD();
-                Dataset<Row> outputDf = spark.createDataFrame(rowJavaRDD, outPutSchemaStructType);
-                outputDf.show();
-                
-                outputDf.createOrReplaceTempView(relation);
+                Dataset<Row> dataframe = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");
+                dataframe.createOrReplaceTempView(relation);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -179,7 +168,7 @@ public class App {
 
         // Create schemas
         Schema.Parser parser = new Schema.Parser().setValidate(true);
-        schemas = new HashMap<String, Schema>();
+        HashMap<String, Schema> schemas = new HashMap<String, Schema>();
 
         for (String relation : relations) {
             try {
