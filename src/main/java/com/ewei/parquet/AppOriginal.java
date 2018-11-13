@@ -1,4 +1,4 @@
-package com.ewei.parquet;
+/*package com.ewei.parquet;
 
 import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
@@ -293,4 +293,4 @@ public class App {
 
         outputWriter.close();
     }
-}
+}*/
