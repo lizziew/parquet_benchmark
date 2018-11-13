@@ -1,6 +1,5 @@
 package com.ewei.parquet;
 
-import com.databricks.spark.avro.SchemaConverters;
 import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -18,6 +17,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
 
 import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
+import org.apache.parquet.column.values.ValuesReader; 
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -30,9 +30,9 @@ public class App {
     private static final String M1 = "/mnt/minwei/";
     private static final String M2 = "/Users/elizabethwei/code/";
 
-    private static final String OUTPUT_PATH = M2 + "parquet_benchmark/";
-    private static final String CSV_PATH = M2 + "parquet_benchmark/";
-    private static final String PARQUET_PATH = M2 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
+    private static final String OUTPUT_PATH = M1 + "parquet_benchmark/";
+    private static final String CSV_PATH = M1 + "parquet_benchmark/";
+    private static final String PARQUET_PATH = M1 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
 
     private static ArrayList<String> relations;
     private static HashMap<String, Schema> schemas;
@@ -89,7 +89,8 @@ public class App {
         }*/
 
         Dataset<Row> sqlDF =
-                spark.sql("SELECT * FROM parquet.`examples/src/main/resources/users.parquet`");
+                spark.read().parquet("/mnt/minwei/hmm.parquet");
+	// Dataset<Row> people = spark.read().json("/mnt/minwei/people.json");
         sqlDF.show();
     }
 
@@ -202,7 +203,7 @@ public class App {
         }
 
         // Query Parquet
-        SparkSession spark = SparkSession.builder().appName("BenchmarkParquetSum").config("spark.master", "local").getOrCreate();
+        SparkSession spark = SparkSession.builder().appName("Small").config("spark.master", "local").getOrCreate();
         queryParquet(spark);
         spark.stop();
     }
