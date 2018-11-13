@@ -6,6 +6,6 @@ do
   do 
     mvn clean 
     mvn install dependency:copy-dependencies
-    java -server -cp "target/benchmark-1.0-SNAPSHOT.jar:target/dependency/*" com.ewei.parquet.App $i $j
+    java -server -Xmx64g -cp "target/benchmark-1.0-SNAPSHOT.jar:target/dependency/*" com.ewei.parquet.App $i $j
   done
 done 
