@@ -8,8 +8,10 @@ import org.apache.spark.sql.SparkSession;
 
 public class App {
     private static final String M1 = "/mnt/minwei/";
-    private static final String CSV_PATH = M1 + "tpch-dbgen/";
-    private static final String PARQUET_PATH = M1 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
+    private static final String M2 = "/Users/elizabethwei/code/";
+
+    private static final String CSV_PATH = M2 + "tpch-dbgen/";
+    private static final String PARQUET_PATH = M2 + "parquet_benchmark/src/main/java/com/ewei/parquet/";
 
     public static void main(String[] args) {
         String compressionSchemeString = args[0];
@@ -35,16 +37,15 @@ public class App {
 
             schemaString.deleteCharAt(schemaString.length() - 1);
 
-            Dataset<Row> row = spark.read().option("header", "false").schema(schemaString.toString()).csv(CSV_PATH + "lineitem.csv");
+            Dataset<Row> csvInput = spark.read().option("header", "false").option("delimiter", "|").schema(schemaString.toString()).csv(CSV_PATH + "lineitem.csv");
+            csvInput.show();
+            csvInput.write().parquet(PARQUET_PATH + "lineitem.parquet");
+
+            Dataset<Row> parquetOutput = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");
+            parquetOutput.show();
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-
-        // Dataset<Row> dataframe = spark.read().schema(schemaString.toString()).parquet(PARQUET_PATH + relation + ".parquet");
-        // dataframe.createOrReplaceTempView(relation);
-        Dataset<Row> sqlDF = spark.read().parquet("/mnt/minwei/hmm.parquet");
-        sqlDF.show();
 
         spark.stop();
     }
